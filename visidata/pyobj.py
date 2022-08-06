@@ -10,6 +10,7 @@ vd.option('default_sample_size', 100, 'number of rows to sample for regex.split 
 
 vd.option('expanded_column_format_dict', '%s.%s', 'column name given to expanded columns (dictionaries)')
 vd.option('expanded_column_format_list', '%s[%s]',  'column name given to expanded columns (lists and tuples)')
+vd.option('expanded_column_list_1up', False,  'expanded columns become 1-based arrays for lists and tuples, when this option is True')
 
 
 class PythonSheet(Sheet):
@@ -113,6 +114,7 @@ def _(sampleValue, col, vals):
     '''Use the longest sequence to determine the number of columns we need to
     create, and their presumed types'''
     expandedColumnFormat = vd.options.expanded_column_format_list
+    start = 1 if vd.options.expanded_column_list_1up else 0 
     
     def lenNoExceptions(v):
         try:
@@ -122,7 +124,7 @@ def _(sampleValue, col, vals):
     longestSeq = max(vals, key=lenNoExceptions)
     colTypes = [deduceType(v) for v in longestSeq]
     return [
-        ExpandedColumn( expandedColumnFormat % (col.name, k), type=colType, origCol=col, key=k)
+        ExpandedColumn( expandedColumnFormat % (col.name, k+start), type=colType, origCol=col, key=k)
             for k, colType in enumerate(colTypes)
     ]
 
