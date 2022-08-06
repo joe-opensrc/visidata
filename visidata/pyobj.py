@@ -8,6 +8,9 @@ from visidata import *
 vd.option('visibility', 0, 'visibility level')
 vd.option('default_sample_size', 100, 'number of rows to sample for regex.split (0=all)', replay=True)
 
+vd.option('expanded_column_format_dict', '%s.%s', 'column name given to expanded columns (dictionaries)')
+vd.option('expanded_column_format_list', '%s[%s]',  'column name given to expanded columns (lists and tuples)')
+
 
 class PythonSheet(Sheet):
     def openRow(self, row):
@@ -89,6 +92,7 @@ def _(sampleValue, col, vals):
     '''Build a set of columns to add, using the first occurrence of each key to
     determine column type'''
     newcols = {}
+    expandedColumnFormat = vd.options.expanded_column_format_dict
 
     for val in Progress(vals, 'expanding'):
         colsToAdd = set(val).difference(newcols)
@@ -99,7 +103,7 @@ def _(sampleValue, col, vals):
         })
 
     return [
-        ExpandedColumn('%s.%s' % (col.name, k), type=v, origCol=col, key=k)
+        ExpandedColumn( expandedColumnFormat % (col.name, k), type=v, origCol=col, key=k)
             for k, v in newcols.items()
     ]
 
@@ -108,6 +112,8 @@ def _(sampleValue, col, vals):
 def _(sampleValue, col, vals):
     '''Use the longest sequence to determine the number of columns we need to
     create, and their presumed types'''
+    expandedColumnFormat = vd.options.expanded_column_format_list
+    
     def lenNoExceptions(v):
         try:
             return len(v)
@@ -116,7 +122,7 @@ def _(sampleValue, col, vals):
     longestSeq = max(vals, key=lenNoExceptions)
     colTypes = [deduceType(v) for v in longestSeq]
     return [
-        ExpandedColumn('%s[%s]' % (col.name, k), type=colType, origCol=col, key=k)
+        ExpandedColumn( expandedColumnFormat % (col.name, k), type=colType, origCol=col, key=k)
             for k, colType in enumerate(colTypes)
     ]
 
