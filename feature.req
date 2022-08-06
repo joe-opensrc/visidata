@@ -1,0 +1,26 @@
+---
+title: Add options allowing a user to specify the format of expanded column names [pyobj]
+body: |
+
+Proposed Change / Requirement (Logical):
+
+- Allow the user to specify the format string used to expand python object columns of type `list` and `dict`
+
+Why? Good Question(tm)! :) 
+This is to allow increased interoperability with external programs when converting between csv-json, and viceversa.
+In this particular case with `mlr` which serializes csv based on "%s.%s"
+
+Currently the format with which python object columns are expanded is currently hardcoded to a specific string, e.g., "%s.%s", "%s[%s]"].  
+This patch changes them to a variable / option.
+
+
+
+The requirement is to increase interoperability of parsing by 
+
+
+ 
+ExpandedColumn('`%s.%s`' % (col.name, k), type=v, origCol=col, key=k)
+
+expanded_column_format_dict
+expanded_column_format_list
+
