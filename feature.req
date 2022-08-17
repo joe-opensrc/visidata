@@ -1,26 +1,184 @@
 ---
-title: Add options allowing a user to specify the format of expanded column names [pyobj]
+title: Add options + code that allows a user to specify the format of expanded column names [pyobj]
 body: |
 
-Proposed Change / Requirement (Logical):
+### Proposed Change / Requirement:
 
-- Allow the user to specify the format string used to expand python object columns of type `list` and `dict`
+- Allow the user to specify the format string used to name expanded python object columns of type `list` and `dict`, e.g., "%s[%s]"
+- Allow the user to specify lists as being 0- or 1-based, e.g. a[0] vs a[1]
 
-Why? Good Question(tm)! :) 
-This is to allow increased interoperability with external programs when converting between csv-json, and viceversa.
-In this particular case with `mlr` which serializes csv based on "%s.%s"
+Currently the formats used to generate the name of an expanded column are hardcoded in `pyobj.py`.
 
-Currently the format with which python object columns are expanded is currently hardcoded to a specific string, e.g., "%s.%s", "%s[%s]"].  
-This patch changes them to a variable / option.
+It is proposed to allow the user to set them programmatically via means of 2 visidata options.
+
+Further, in the case of lists, (and only affecting the name), it is proposed to allow the indexing of flattened lists/tuples 
+to optionally start at 1, (c.f., the current value: 0).  Again, with a visidata option.
+
+### Why? Good Question, Thanks For Asking! :) 
+
+This is to allow better interoperability with external programs when converting between csv-json, and vice versa.
+In this particular case with `mlr`, which serializes json/csv using 1-based arrays and with format "%s.%s".
+
+### Proof of Concept:
+
+Initial Notes:
+
+Not sure if this is the way to do it; i.e., not sure if it should probably be a plugin, etc.
+Also, it doesn't have error checking on the format string, so can easily throw an error, .e.g., 
+"TypeError: not enough arguments for format string"
+
+It is however, Hideously Functional⁽™⁾ :)
+
+We introduce 3 new options:
+
+- expanded_column_format_dict # str
+- expanded_column_format_list # str
+- expanded_column_list_1up    # bool
+
+more specifically: 
+
+```python
+vd.option('expanded_column_format_dict', '%s.%s', 'column name given to expanded columns (dictionaries)')
+vd.option('expanded_column_format_list', '%s[%s]',  'column name given to expanded columns (lists and tuples)')
+vd.option('expanded_column_list_1up', False,  'expanded columns become 1-based arrays for lists and tuples, when this option is True')
+```
+
+These default to the current hardcoded values, and allows them of course to be set in `.visidatarc`
+
+Currently vd would expand the input: `{ x: [ "a", "b", "c" ] }` to:
+
+```
+x[0],x[1],x[2]
+a,b,c
+```
+
+With the proposed changes (and example settings), we can produce:
+
+```
+x.1,x.2,x.3
+a,b,c
+
+```
+
+Which allows us to take our flattened-json in csv format, and recover the structure using mlr,
+i.e., with column expansion in vd, the following pipeline is idempotent to its input:
+
+
+```shell
+echo '{ "x": [ "a", "b", "c" ] }' | vd -f json --save-filetype=csv | mlr --c2j --no-jlistwrap cat
+```
+
+I've attached the would be pull-request as combined unified diff, and
+the local branch I've been working on was forked from branch: `origin/develop@554ebdf5`
+
+Regardless, if this isn't possible / suitable, etc..I would be equally happy to hear there's an alternative in existence, 
+or there's a better way to achieve the same thing, etc.
+
+Cheers,
+
+Joe.
+
+
+diff: [expanded-column-format-option.patch.txt](https://github.com/saulpw/visidata/files/9275481/expanded-column-format-option.patch.txt)
 
 
 
-The requirement is to increase interoperability of parsing by 
+---
+
+hello @saulpw,
+
+thank you for the reply :)
+
+### tl;dr
+
+> Personally ok with existing notation.
+> Prefer configurability; flexible with external JSON/CSV tools.
+> Agree with `array_base`; better name!
+
+### longer response:
+
+Personally I quite like the visidata notation of `a[n]` and `a.x`; less ambiguous as to the underlying type.
+I think I would lament the loss! :D 
+
+### re configurability;
+I think I prefer configurability.
+
+I'm using visidata (along with a few other tools), to help wrangle CSV to/from JSON, 
+and for my use-case I think the end-goal would be to have the ability to collapse columns via a parser/tokeniser for those sheet types.  i.e., using a method that doesn't rely on having the `origCol` from a previous expansion.
+
+Something which would allow bi-directional parsing of CSV+notation to/from JSON, e.g.,:
+
+  1. open csv file 
+  2. parse / unflatten columns in CSV+notation into JSON / pyobj (using configurable options)
+  3. wrangle data
+  4. expand / flatten columns into CSV+notation (using configurable options)
+  5. save csv file
+
+I'm currently using `mlr` to achieve 2., and opening as JSON.
+This suggestion is basically no. 4.
+
+Although 2. is a non-trivial problem, for sure, it could perhaps lend itself to being a plugin(?)
+One which might provide alternatives for the vd `expand-col*` commands, and maybe leverage an external library in the process, etc.
+
+### re `array_base`;
+
+..is totally a better name :). 
+How about:
+ ecol_list_format ? 
+ ecol_dict_format ?
+
+### Additional: 
+
+Another example of a JSON serialization tool is `gron`:
+
+```shell
+echo '{ "x": [ "a", "b", "c" ], "y": { "z": "###" } }' | gron
+json = {};
+json.x = [];
+json.x[0] = "a";
+json.x[1] = "b";
+json.x[2] = "c";
+json.y = {};
+json.y.z = "###";
+```
+
+Which you can see is closer to visidata notation.
+
+To illustrate, the real-world reasoning / problem goes like this:
+
+  A department MUST use Excel/CSV to provide data to a pipeline (boo!)
+  The data MUST later be transformed to/from JSON 
+  The data MIGHT later be transformed back to CSV/Excel 
+  CSV is flat / has no structure
+  JSON is not-flat / is structured.
+  The aim is to preserve the structure of the data using the CSV column names (CSV+notation).
+  visidata cannot parse CSV+notation into JSON 
+  external tools can parse CSV+notation in JSON, but use different formats i.e., `a[0]` vs `a.0` vs `a.1`, etc...  
+  therefore make visidata capable of producing column names which conform to external tool notation
+  eventually make visidata parse CSV+notation internally in production of its column names; via a loader plugin.
+  
+Or something like that! :D
+
+Apols for the essay,
+hope this is useful,
+
+
+@joe-opensrc
 
 
  
-ExpandedColumn('`%s.%s`' % (col.name, k), type=v, origCol=col, key=k)
+[mlr-mlrval-flatten-unflatten]https://github.com/johnkerl/miller/blob/46d013d44fdf27bd036b6584aaf3fbe87bbd9b96/internal/pkg/mlrval/mlrmap_flatten_unflatten.go
+ 
 
-expanded_column_format_dict
-expanded_column_format_list
+--- 
+
+Personally I prefer visidatas notation of `a[n]` and `a.x`, as it removes ambiguity, 
+
+although I am agnostic, and probably lean to it being a Configurable Thing.
+
+ecol_list-format
+ecol_dict_format 
+
+array_base
+  ( and apologies in advance for the bla$phemy):
 
